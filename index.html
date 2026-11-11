@@ -38,6 +38,8 @@
   #keyAdd[hidden], #keyRemove[hidden], #keyInteract[hidden], #worldKeys[hidden] { display: none; }
   .keys { display: flex; flex-wrap: wrap; gap: 0.2rem 2.2rem; margin: 0.3rem 0 0; color: #93a4bd; font-size: 0.9rem; }
   .groupName { margin-right: 0.3rem; color: #edf2fb; font-weight: 600; }
+  .credit { margin: 0.3rem 0 0; color: #93a4bd; font-size: 0.8rem; }
+  .credit a { color: #b8dcff; }
   kbd { margin-left: 0.5rem; padding: 0 0.35rem; background: #1a263b; border: 1px solid #34445d; border-radius: 0.25rem; color: #edf2fb; font: 0.85rem ui-monospace, monospace; }
   kbd + kbd { margin-left: 0.15rem; }
 </style>
@@ -55,6 +57,8 @@
       <span><span class="groupName">Show</span><kbd>p</kbd> thumbnail or world<span id="keyInteract"><kbd>i</kbd> keys to the world for <span id="interactSeconds"></span> seconds</span></span>
       <span id="worldKeys"><span class="groupName">In the world</span>after <kbd>i</kbd>, <kbd>&rarr;</kbd> hurries to the next portal</span>
     </div>
+    <p class="credit">Left alone, a world flies on through its portal into other worlds. Portals chooses those worlds, not this page, and the list keeps showing the world that you selected.</p>
+    <p class="credit">The worlds are from <a href="https://portals-endless-worlds.netlify.app" target="_blank" rel="noopener">Portals</a> by Ethan Mollick. Portals repository: <a href="https://github.com/emollick/ai-portals" target="_blank" rel="noopener">github.com/emollick/ai-portals</a>, under the CC BY-NC-SA 4.0 license.</p>
   </div>
 </main>
 <script>
