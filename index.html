@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Favorite Worlds</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: #111827; color: #edf2fb; font: 1rem/1.5 system-ui, sans-serif; overflow: hidden; }
+  main { height: 100%; display: grid; grid-template-columns: 20rem 1fr; gap: 0.75rem; padding: 0.75rem; }
+  .listBox { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #frame[hidden], #pic[hidden] { display: none; }
+  .listHead { margin-bottom: 0.3rem; }
+  .listHead label { margin-right: 0.5rem; }
+  .addRow { margin-bottom: 0.3rem; }
+  #addInput { width: 100%; padding: 0.25rem 0.4rem; background: #1a263b; color: #edf2fb; border: 1px solid #34445d; border-radius: 0.3rem; font: 0.85rem system-ui, sans-serif; }
+  #addMessage { display: block; color: #f0c05a; font-size: 0.8rem; }
+  #defaults { padding: 0.1rem 0.6rem; background: #1a263b; color: #bcc9dc; border: 1px solid #34445d; border-radius: 0.4rem; font: inherit; font-size: 0.85rem; cursor: pointer; }
+  #clear { padding: 0.1rem 0.6rem; background: #1a263b; color: #f0a5a3; border: 1px solid #7a3b3a; border-radius: 0.4rem; font: inherit; font-size: 0.85rem; cursor: pointer; }
+  .urlList { flex: 1; overflow-y: auto; padding: 0.4rem 0.6rem; background: #1a263b; border: 1px solid #34445d; font: 0.8rem/1.5 ui-monospace, monospace; white-space: nowrap; }
+  .urlList a { display: block; color: #b8dcff; }
+  .urlList a:visited { color: #c9b8ff; }
+  .urlList a.favorite { color: #7fe0a0; }
+  .urlList a.selected { background: #34445d; }
+  #center { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.5rem; }
+  #tabs button { padding: 0.35rem 0.9rem; background: #1a263b; color: #bcc9dc; border: 1px solid #34445d; border-radius: 0.4rem; font: inherit; cursor: pointer; }
+  #tabs button[aria-selected="true"] { background: #2f4a6e; color: #fff; border-color: #7b9bc4; }
+  #view { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; border: 4px solid #34445d; border-radius: 0.4rem; }
+  #view.favorite { border-color: #3fbf6a; }
+  #frame { flex: 1; align-self: stretch; border: 0; background: #000; }
+  #pic { display: block; max-width: 100%; max-height: 100%; aspect-ratio: 16 / 9; background: #000; }
+  #info { display: flex; align-items: baseline; gap: 0.8rem; margin: 0.5rem 0 0; font-size: 1.1rem; }
+  #pos { color: #93a4bd; }
+  #mode { color: #f0c05a; }
+  #keyAdd[hidden], #keyRemove[hidden], #keyInteract[hidden], #worldKeys[hidden] { display: none; }
+  .keys { display: flex; flex-wrap: wrap; gap: 0.2rem 2.2rem; margin: 0.3rem 0 0; color: #93a4bd; font-size: 0.9rem; }
+  .groupName { margin-right: 0.3rem; color: #edf2fb; font-weight: 600; }
+  kbd { margin-left: 0.5rem; padding: 0 0.35rem; background: #1a263b; border: 1px solid #34445d; border-radius: 0.25rem; color: #edf2fb; font: 0.85rem ui-monospace, monospace; }
+  kbd + kbd { margin-left: 0.15rem; }
+</style>
+</head>
+<body>
+<main>
+  <div class="listBox"><div class="listHead"><label id="upLabel"><span id="listName"></span> (<span id="upCount">0</span>)</label> <button type="button" id="clear" hidden>Clear</button> <button type="button" id="defaults" hidden>Default</button></div><div class="addRow"><input id="addInput" type="text" list="worldNames" autocomplete="off" placeholder="Add a favorite: name or number" aria-label="Add a favorite by world name or number"><datalist id="worldNames"></datalist><span id="addMessage"></span></div><div id="upList" class="urlList" role="list" aria-labelledby="upLabel"></div></div>
+  <div id="center">
+    <div id="tabs" role="tablist"><button type="button" role="tab" data-tab="favorites">Favorites (<span id="count-favorites">0</span>)</button><button type="button" role="tab" data-tab="all">All (<span id="count-all">0</span>)</button><button type="button" role="tab" data-tab="highest">Highest rated by builders (<span id="count-highest">0</span>)</button></div>
+    <div id="view"><iframe id="frame" title="Selected world"></iframe><img id="pic" alt="" hidden></div>
+    <div id="info"><span id="pos"></span><strong id="name"></strong><span id="mode"></span></div>
+    <div class="keys">
+      <span><span class="groupName">Favorites</span><span id="keyAdd"><kbd>&larr;</kbd> <span id="keyAddText"></span></span><span id="keyRemove"><kbd>&rarr;</kbd> <span id="keyRemoveText"></span></span><kbd>a</kbd> type a world name or number to add it</span>
+      <span><span class="groupName">Go to</span><kbd>&uarr;</kbd><kbd>&darr;</kbd> previous and next world in the list<kbd>Tab</kbd> next list</span>
+      <span><span class="groupName">Show</span><kbd>p</kbd> thumbnail or world<span id="keyInteract"><kbd>i</kbd> keys to the world for <span id="interactSeconds"></span> seconds</span></span>
+      <span id="worldKeys"><span class="groupName">In the world</span>after <kbd>i</kbd>, <kbd>&rarr;</kbd> hurries to the next portal</span>
+    </div>
+  </div>
+</main>
+<script>
+const TABS = { all: ["across-the-sea-of-ice","after-rain-the-whales","after-the-sixth-sun","airbrush-black-hole","airship-shed-dawn","alpenglow-horn","amber-reticulum","asgard-bridge-of-light","atlantic-falls-in","atoll-pass-shark-wall","attic-railway","aurora-fjord","azulejo-descent","back-to-us-above-the-fog","backlit-jade-range","ball-inside-the-small-flat","bamboo-surf","banyan-homecoming","bare-oilcloth-night","basalt-organ-cave","batik-monsoon","beaded-sea","bed-went-walking","bells-before-breakfast","blown-city","blue-cities-in-glass-globes","blue-city-holi","blue-fire-crater","blue-riband-poster","blue-sails-dry-sea","boat-with-no-one-aboard","boathouse-full-of-morning","boulders-that-walk","breakfast-table","brick-outgrows-the-cloud","bridges-of-marigold","brimstone-parasol","brinicle-ice-finger","bronze-walled-island","bubble-skin","cables-to-the-moon","canyon-of-light","canyon-of-three-airs","car-that-must-back-up","carded-moor","carillon-grove","carnival-on-the-frozen-river","carousel-works","carved-house-in-snow","cast-off-sound","castle-before-the-tide","cell-highway","chains-turned-to-stone","chamak-road","chambered-sun","chandelier-city","checkerboard-approach","chinar-water-terraces","city-closing-overhead","city-doubled-in-its-lake","city-hung-below-its-net","city-in-the-lake","city-on-stilts-above-the-cloud","clipped-menagerie","cloisonne-typhoon","cloud-armada","cloud-in-the-cave","cloudburst-local","colossus-of-rhodes","combed-sea","comet-over-the-lake-town","comet-perihelion","corniche-120","coronal-rain","country-in-squares","country-of-pins","country-with-no-up","courts-in-the-attics","crane-harbour","cranes-in-steam","crayon-house","crescent-over-yucatan","curl-tree-winter","cut-from-the-sky","cut-mountain","dawn-tracks-contrail","deer-cave-exodus","delta-in-flood","dew-garden","dial-towers-at-dusk","doors-in-transit","drafted-city","dragon-kite-loft","dragons-blood-fog","drawer-cliffs","drowned-domes","drowned-forest-lakes","ember-moon-tide","emperor-clearing","engine-turned-sea","engraved-sea-chart","envelope-at-dawn","evening-is-the-beam-tipping","every-last-wire","every-wingbeat-stays","false-stars","fern-sea-midnight","field-in-thick-paint","field-of-doors","fields-of-gazing-grain","figure-and-ground","fire-in-the-sand-sea","fireworks-under-the-wash","first-rain-palace","first-rain-stepwell","first-snow-on-kraft","five-colour-river","flavian-amphitheatre","fleet-in-six-wools","flinching-forest","floor-without-windows","flying-boat-karst-bay","fog-river-bridge","fogged-palm-house","folding-market","forest-from-a-drop","forest-tied-from-above","forty-four-sunsets","four-colour-launch","four-stone-kings-over-the-river","frieze-without-end","frozen-weather-museum","gale-in-green-glass","galimoto-yard","galleon-in-the-flowers","gannet-stack-gale","garden-behind-the-ivy-wall","garden-carpet","garden-in-plan","garden-of-sixty-gardens","garden-upside-down","gates-in-the-snow","geode-run","gilded-margin","glass-nave","glass-painted-fleet","glaze-stops-at-the-knees","glider-country","glowwood","great-refractor","green-gate-past-the-poppies","green-with-the-rain","groundswell-country","hail-cathedral","half-city-of-the-fair","half-coloured-regatta","hall-of-strings","hall-roofed-with-weather","halls-between-sea-and-cloud","hammam-of-stars","hands-in-the-painted-cave","hanging-gardens-of-babylon","hanging-sea-lilies","harbour-in-the-aurora","harbour-of-one-lamp","harvest-in-profile","heavy-things-on-a-sheet","hill-of-round-doors","hollow-of-the-wave","honey-cliff","hoopwind-flats","house-behind-the-waterfall","house-in-the-niche","house-of-four-seasons","house-opens-seaward","houses-on-strings","hull-in-frames","hull-town","hundred-layer-red","ice-arcade","indigo-pits","ink-dragon","inside-out-world","iron-tide","iron-tower-first-night","island-being-born","island-that-shades-the-fields","islands-in-custard","isle-of-broken-towers","jungle-he-never-saw","kelp-cathedral","khlong-run","knee-deep-under-the-wave","knotted-river","kohbar-lotus-room","kolam-at-dawn","kurbits-night","ladder-orchard","lake-comes-down-in-curls","lake-dyed-three-times","lake-of-pink-fountains","lamps-among-golden-leaves","lamps-under-the-roots","lantern-river","lanterns-under-ice","last-lit-windows","leaded-forest","lemon-cliffs","lens-works","light-from-the-left","light-in-every-dark-place","line-along-the-river-of-stars","line-through-the-hill","liquid-crystal-squall","litho-medusae","long-library","longest-animal","loom-of-numbers","macaw-wall","maelstrom-descent","malecon-norther","mammoth-midnight-sun","manta-cyclone","maple-gale","mara-crossing","marigold-way-home","mausoleum-at-halicarnassus","mayfly-bloom","mended-country","milky-sea","million-mirrors","mirror-chimneys","mola-reef","monarch-sanctuary","moon-in-dry-dock","moon-in-every-paddy","moon-jar-kiln","moor-under-the-fog-bank","morning-after-the-gale","moss-rain-veranda","mother-of-pearl-shoal","mountain-of-four-elements","mud-tower-haboob","muffins-that-look-back","natron-liftoff","neon-monsoon","net-on-the-vault","net-up-the-pillar","night-by-the-slice","night-shining","night-under-the-oaks","no-colour-on-colour","nobody-up-yet","obsidian-forge","octilinear-city","oculus-day","old-light-arriving","one-bit-moonrise","one-standing-place","orbit-dawn","otter-in-the-window-seat","out-the-nursery-window","over-the-rim","over-the-wall-on-a-box","painted-ridges","painted-shadow-town","painted-where-you-stood","pallet-tower-midsummer","paper-boat-rapids","paper-kingdom","pastel-bulb-fields","patio-of-pots","peak-above-the-singing-fields","pedalling-bones","pelican-collage","pelican-peloton","pencil-test-rays","petal-storm","pharos-of-alexandria","pier-comet","pillar-of-the-white-night","pillars-before-trees","plain-of-fans","plain-with-two-sides","pneumatic-emporium","pointillist-nursery","pole-that-must-not-fall","pond-drop","pond-with-no-water","prismatic-dawn","pyramid-of-khufu","railway-under-the-sea","rainbow-bridge-scroll","raising-the-ger","red-drive-down-to-the-sea","red-sails-dawn","redwood-dawn","reindeer-cyclone","reverse-angle","ring-run","ringed-shore","river-that-sinks-under-the-garden","roll-top-harbour","roofs-of-the-old-stone","room-is-a-camera","room-of-swallows","room-turning-red","running-wall","saguaro-serigraph","salmon-falls","salt-wind-city","same-field-every-hour","sapphire-moulin","sauropod-ford","scale-tree-mire","scholars-shelves","scratched-kalahari","sea-of-loose-coin","sea-sets-in-shade","sea-stands-open","sea-turns-square","seven-hundred-feet-of-ice","seven-rooms-one-clock","seventy-eight-in-the-rain","shadow-theatre","shaft-between-the-hexagons","shaken-globe","shelves-of-lit-memories","shoal-over-the-high-street","shoebox-reef","shore-without-horizon","silent-engine","silver-domes-and-streets-of-lead","silver-dragon-bore","singing-erg","six-arms","sixty-fountains","sky-archipelago","sky-through-the-bone","sky-with-a-seam","sledge-between-volcanoes","sleeping-hill","slipway-blossom","slow-rain-sea","smoke-turns-the-aspens","snow-ghosts","snow-lattice-model","snow-on-turquoise","snowbound-viaduct","sown-with-cloth","splashdown","spore-rain","squall-of-light","square-at-the-wrong-hour","stag-boulevard","stair-that-doubles","stair-that-points-at-the-pole","stairway-everywhere","standing-sleepers","standing-tide","standing-wave-schlieren","star-with-one-blue-world","still-lake-in-the-herd","still-on-the-sprue","still-warm","still-waving","stitched-country","stone-face","stone-knives","stone-on-the-fifth-line","stork-kettle-riso","storm-bands","storm-savanna","storm-that-drowned-no-one","strait-between-two-rocks","striped-tents-white-fire","stripes-in-the-grass","study-at-mouse-height","sun-in-the-antlers","sun-print-meadow","sunken-colossus","sweet-green-interior","swordbill-round","tables-under-the-falling-sky","tempest-light","temple-of-artemis","tempo-fen","ten-past-ten","tenfold-every-two-seconds","the-blank-answer","the-branching","the-calving","the-city-that-left","the-desert-opens","the-digging-wheel","the-fire-comes-round","the-green-room","the-ground-turns","the-leader","the-light-comes-on","the-long-swan","the-murmuration","the-other-side-of-town","the-red-weed","the-same-minute","the-sea-above","the-sounding","the-street-goes-up","the-striking-hour","the-tall-cloud","the-throat","the-toppling","the-turning-night","the-umbra","the-unspilling","the-valley-unzips","the-way-back-round","the-yard-goes-green","thermal-cold-wake","thousand-kite-roofs","thousand-lagoons","thousand-li-blue-green","three-avenues-under-the-floor","three-pegs-in-the-valley","three-shadows-each","through-the-tower","tideline-cloister","tiled-cockerel-kitchen","tissue-and-balsa-meet","titan-strait","to-the-brim","towers-over-the-old-city","town-from-all-sides","town-kept-up-by-fans","town-round-one-stair","treetop-giants","tulou-rings","turned-country","twelve-metre-tide","twenty-floods","under-the-snow-roof","unrolling-wood","unstrung-falls","uphill-to-black","upward-falls","valley-inside-the-works","valley-of-falls","walking-dune","water-clock-city","waterspout-sisters","weight-of-glass","well-of-rain","wells-over-the-buried-lake","whale-fall-garden","what-happened-here","what-the-frog-sees","what-the-ocean-builds","wheel-of-life","where-circles-hum","where-horses-are-blue","where-the-lattice-grows","where-the-page-was-folded","where-the-pattern-falls","whiplash-wind","wind-draws-the-namib","wine-dark-cup","wood-behind-the-coats","wooden-sea-stage","world-turtle","written-range","zeus-at-olympia"], highest: ["alpenglow-horn","attic-railway","backlit-jade-range","ball-inside-the-small-flat","blue-riband-poster","carillon-grove","carnival-on-the-frozen-river","checkerboard-approach","cloisonne-typhoon","dew-garden","dragon-kite-loft","first-rain-stepwell","glass-nave","hanging-sea-lilies","iron-tower-first-night","lantern-river","lanterns-under-ice","leaded-forest","lens-works","litho-medusae","marigold-way-home","million-mirrors","oculus-day","orbit-dawn","painted-ridges","petal-storm","prismatic-dawn","reindeer-cyclone","scholars-shelves","shadow-theatre","snow-on-turquoise","snowbound-viaduct","stairway-everywhere","the-toppling","through-the-tower","towers-over-the-old-city","twelve-metre-tide","uphill-to-black","wooden-sea-stage","world-turtle"] };
+const SITE = 'https://portals-endless-worlds.netlify.app';
+const FAVORITES = 'favorites';
+const ALL = 'all';
+const HIGHEST = 'highest';
+// the order in which the Tab key steps through the tabs
+const TAB_ORDER = [FAVORITES, ALL, HIGHEST];
+// the name that the list on the left shows for each tab
+const TAB_LABELS = { [FAVORITES]: 'Favorites', [ALL]: 'All', [HIGHEST]: 'Highest rated by builders' };
+const BLANK_PAGE = 'about:blank';
+const EMPTY_TAB_NOTICE = 'No worlds in this list.';
+// the number of seconds for which the i key gives the world the keyboard focus
+const INTERACT_SECONDS = 3;
+// the number of seconds after the iframe starts to load a world during which the i key is unavailable
+const INTERACT_DELAY_SECONDS = 5;
+const INTERACT_NOTICE = 'Keys go to the world for ' + INTERACT_SECONDS + ' seconds: right arrow hurries to the next portal.';
+// the names of the favorite worlds
+let favorites;
+// The page's URL carries the favorites after the # sign, as in #fav=24,61, so that a copied URL shares them.
+// Each number is a world's position in TABS.all, counted from 1. This text after the # sign is a favorites hash.
+const HASH_PARAMETER = 'fav';
+// the default favorites, which the user supplied as a URL on 2026-11-11
+const DEFAULT_HASH = '#fav=9,23,52,85,101,102,130,162,165,169,208,220,221,258,260,277,291,308,314,320,363,427,430,447';
+// the browser storage key that holds the favorites hash of the last change
+const STORAGE_KEY = 'thumb-review-favorites';
+// The favorites come from the first of these that holds a favorites hash: the URL, the browser storage, the default.
+favorites = parseFavorites(location.hash) || parseFavorites(localStorage.getItem(STORAGE_KEY) || '') || parseFavorites(DEFAULT_HASH);
+save();
+
+// the favorites that a favorites hash carries, or null when the text carries none
+function parseFavorites(hash) {
+  const parameters = new URLSearchParams(hash.slice(1));
+  if (!parameters.has(HASH_PARAMETER)) return null;
+  const result = new Set();
+  for (const text of parameters.get(HASH_PARAMETER).split(',')) {
+    if (text === '') continue;
+    const position = Number(text);
+    if (!Number.isInteger(position) || position < 1 || position > TABS.all.length) {
+      const message = 'The favorites list "' + hash + '" names world number "' + text + '"; a world number is a whole number from 1 to ' + TABS.all.length + '.';
+      alert(message);
+      throw new Error(message);
+    }
+    result.add(TABS.all[position - 1]);
+  }
+  return result;
+}
+
+function favoritesHash() {
+  const positions = [];
+  TABS.all.forEach((name, index) => { if (favorites.has(name)) positions.push(index + 1); });
+  return '#' + HASH_PARAMETER + '=' + positions.join(',');
+}
+
+// a URL that the user pastes into this tab replaces the favorites
+window.addEventListener('hashchange', () => {
+  const pastedFavorites = parseFavorites(location.hash);
+  if (!pastedFavorites) return;
+  favorites = pastedFavorites;
+  forgetLastChanges();
+  save();
+  render();
+});
+
+// the selected position that each tab had when the user left it
+const positions = {};
+for (const tabName of TAB_ORDER) positions[tabName] = 0;
+// the page starts on the first favorite, or on the first world of all when no world is a favorite
+let tab = tabNames(FAVORITES).length > 0 ? FAVORITES : ALL;
+// the worlds of the selected tab
+let NAMES = [];
+let current = 0;
+// true: the center shows the thumbnail; false: the center shows the world's page in the iframe
+let showThumb = false;
+// true: the iframe keeps the keyboard focus, so the world's page receives the keys
+let interact = false;
+// The worlds that the left arrow added to the favorites, and the worlds that the right arrow removed from them, each in
+// the order of the key presses. The opposite arrow undoes those changes one at a time, the latest first.
+let addedWorlds = [];
+let removedWorlds = [];
+// what an arrow does: SET changes the selected world, UNDO reverses the last change of the opposite arrow, NONE nothing
+const SET = 'set';
+const UNDO = 'undo';
+const NONE = 'none';
+const ARROW_TEXTS = {
+  add: { [SET]: 'add this world and go to the next', [UNDO]: 'restore the last removed world, one per press', [NONE]: '' },
+  remove: { [SET]: 'remove this world and go to the next', [UNDO]: 'remove the last added world, one per press', [NONE]: '' },
+};
+// the timer that ends the i key's period
+let interactTimer = 0;
+// The i key is unavailable for INTERACT_DELAY_SECONDS after the iframe starts to load a world, because the world's
+// hurry key works only once the next world is ready. True: the i key is available.
+let interactAvailable = false;
+let interactAvailableTimer = 0;
+
+// writes the favorites to the URL and to the browser storage
+function save() {
+  const hash = favoritesHash();
+  localStorage.setItem(STORAGE_KEY, hash);
+  if (location.hash !== hash) history.replaceState(null, '', hash);
+}
+
+function setText(id, text) {
+  const element = document.getElementById(id);
+  if (element.textContent !== text) element.textContent = text;
+}
+
+function setLinks(id, names) {
+  const container = document.getElementById(id);
+  const key = names.join(' ');
+  if (container.dataset.key === key) return;
+  container.dataset.key = key;
+  container.textContent = '';
+  for (const name of names) {
+    const link = document.createElement('a');
+    link.href = worldUrl(name);
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = name;
+    link.dataset.name = name;
+    container.appendChild(link);
+  }
+}
+
+// colors the list entries of the favorite worlds, highlights the entry of the named world and scrolls it into view
+function markLinks(id, name) {
+  for (const link of document.getElementById(id).children) {
+    const isFavorite = favorites.has(link.dataset.name);
+    if (link.classList.contains('favorite') !== isFavorite) link.classList.toggle('favorite', isFavorite);
+    const selected = link.dataset.name === name;
+    if (link.classList.contains('selected') === selected) continue;
+    link.classList.toggle('selected', selected);
+    if (selected) link.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// The list on the left shows the worlds of the selected tab. A click on an entry selects that world.
+document.getElementById('upList').addEventListener('click', (event) => {
+  const link = event.target.closest('a');
+  if (!link) return;
+  // a plain click loads the world in the iframe; Ctrl, Shift or Meta with a click lets the browser open the link
+  if (event.ctrlKey || event.shiftKey || event.metaKey) return;
+  event.preventDefault();
+  const index = NAMES.indexOf(link.dataset.name);
+  if (index < 0) throw new Error('no world named ' + link.dataset.name + ' in tab ' + tab);
+  current = index;
+  render();
+});
+
+// the worlds of a tab: the Favorites tab holds the favorite worlds, so it changes with every favorite and unfavorite
+function tabNames(name) {
+  if (name === FAVORITES) return TABS.all.filter((world) => favorites.has(world));  if (!TABS[name]) throw new Error('no tab named ' + name);
+  return TABS[name];
+}
+
+function render() {
+  NAMES = tabNames(tab);
+  for (const tabName of TAB_ORDER) setText('count-' + tabName, String(tabNames(tabName).length));
+  const empty = NAMES.length === 0;
+  if (!empty) current = Math.min(current, NAMES.length - 1);
+  const name = empty ? '' : NAMES[current];
+  const isFavorite = favorites.has(name);
+  const frame = document.getElementById('frame');
+  const pic = document.getElementById('pic');
+  frame.hidden = showThumb;
+  pic.hidden = !showThumb;
+  const frameUrl = showThumb || empty ? BLANK_PAGE : frameWorldUrl(name);
+  if (frame.dataset.url !== frameUrl) {
+    frame.dataset.url = frameUrl;
+    frame.src = frameUrl;
+    interactAvailable = false;
+    clearTimeout(interactAvailableTimer);
+    if (frameUrl !== BLANK_PAGE) interactAvailableTimer = setTimeout(() => { interactAvailable = true; render(); }, INTERACT_DELAY_SECONDS * 1000);
+  }
+  // the legend shows the i key and the world's keys only while the i key is available
+  document.getElementById('keyInteract').hidden = !interactAvailable;
+  document.getElementById('worldKeys').hidden = !interactAvailable;
+  // the site hosts each world's thumbnail, so this page needs no file beside it
+  const source = showThumb && !empty ? SITE + '/thumbs/' + encodeURIComponent(name) + '.jpg' : '';
+  if ((pic.getAttribute('src') || '') !== source) { if (source) pic.src = source; else pic.removeAttribute('src'); }
+  if (pic.alt !== name) pic.alt = name;
+  for (const button of document.querySelectorAll('#tabs button')) button.setAttribute('aria-selected', String(button.dataset.tab === tab));
+  document.getElementById('view').className = isFavorite ? 'favorite' : '';
+  setText('pos', empty ? '0 / 0' : (current + 1) + ' / ' + NAMES.length);
+  setText('name', empty ? EMPTY_TAB_NOTICE : name);
+  // the legend shows an arrow only while it can do something, with what it does
+  const addAction = arrowAction(true);
+  const removeAction = arrowAction(false);
+  document.getElementById('keyAdd').hidden = addAction === NONE;
+  document.getElementById('keyRemove').hidden = removeAction === NONE;
+  setText('keyAddText', ARROW_TEXTS.add[addAction] + undoCountText(addAction, true));
+  setText('keyRemoveText', ARROW_TEXTS.remove[removeAction] + undoCountText(removeAction, false));
+  setText('mode', interact ? INTERACT_NOTICE : '');
+  // the Clear and Default buttons belong to the Favorites list, and each shows only while it would change the favorites
+  document.getElementById('clear').hidden = tab !== FAVORITES || empty;
+  document.getElementById('defaults').hidden = tab !== FAVORITES || favoritesHash() === DEFAULT_HASH;
+  setLinks('upList', NAMES);
+  setText('listName', TAB_LABELS[tab]);
+  setText('upCount', String(NAMES.length));
+  markLinks('upList', name);
+}
+
+// What the left arrow (makesFavorite true) or the right arrow (makesFavorite false) does now. The left arrow adds a selected
+// world that is not a favorite; on a favorite, or in an empty list, it undoes the last removal. The right arrow removes
+// a selected favorite; on a world that is not a favorite, or in an empty list, it undoes the last add.
+function arrowAction(makesFavorite) {
+  if (NAMES.length > 0 && favorites.has(NAMES[current]) !== makesFavorite) return SET;
+  return undoableWorlds(makesFavorite).length === 0 ? NONE : UNDO;
+}
+
+// The changes that the left arrow (makesFavorite true) or the right arrow can still undo; the last entry is the next to
+// undo. The function first drops the latest entries that a later change already reversed: a removed world that is a
+// favorite again, or an added world that is no longer a favorite.
+function undoableWorlds(makesFavorite) {
+  const worlds = makesFavorite ? removedWorlds : addedWorlds;
+  while (worlds.length > 0 && favorites.has(worlds[worlds.length - 1]) === makesFavorite) worlds.pop();
+  return worlds;
+}
+
+// the legend's count of the changes that an arrow can still undo, such as " (3 left)"; '' when the arrow does not undo
+function undoCountText(action, makesFavorite) {
+  return action === UNDO ? ' (' + undoableWorlds(makesFavorite).length + ' left)' : '';
+}
+
+// reverses the latest change of the opposite arrow and selects the world that it changed, when the selected list holds it
+function undoFavorite(makesFavorite) {
+  const name = undoableWorlds(makesFavorite).pop();
+  if (makesFavorite) favorites.add(name); else favorites.delete(name);
+  save();
+  const index = tabNames(tab).indexOf(name);
+  if (index >= 0) current = index;
+}
+
+function forgetLastChanges() {
+  addedWorlds = [];
+  removedWorlds = [];
+}
+
+function showTab(name) {
+  positions[tab] = current;
+  tab = name;
+  current = positions[tab];
+  render();
+}
+
+document.getElementById('tabs').addEventListener('click', (event) => {
+  const button = event.target.closest('button');
+  if (!button) return;
+  button.blur();
+  showTab(button.dataset.tab);
+});
+
+// The Clear button makes every favorite an ordinary world again.
+document.getElementById('clear').addEventListener('click', (event) => {
+  event.currentTarget.blur();
+  if (!confirm('Remove all ' + favorites.size + ' favorites?')) return;
+  favorites.clear();
+  forgetLastChanges();
+  save();
+  render();
+});
+
+// The add box: the user types a world name, a part of one, or a world number, and Enter makes that world a favorite.
+// The a key puts the keyboard focus in the box, and Escape leaves it. The box suggests the world names as the user types.
+const addInput = document.getElementById('addInput');
+for (const name of TABS.all) {
+  const option = document.createElement('option');
+  option.value = name;
+  document.getElementById('worldNames').appendChild(option);
+}
+// the number of matching world names that a message lists
+const LISTED_MATCH_COUNT = 5;
+
+// The world that the typed text names: its name, or a message that says why the text names no single world.
+// One of the two properties is ''.
+function findWorld(text) {
+  const query = text.trim().toLowerCase().replace(/\s+/g, '-');
+  if (query === '') return { name: '', message: 'Type a world name or a world number.' };
+  if (/^\d+$/.test(query)) {
+    const position = Number(query);
+    if (position >= 1 && position <= TABS.all.length) return { name: TABS.all[position - 1], message: '' };
+    return { name: '', message: 'A world number is from 1 to ' + TABS.all.length + '.' };
+  }
+  if (TABS.all.includes(query)) return { name: query, message: '' };
+  const matches = TABS.all.filter((name) => name.includes(query));
+  if (matches.length === 1) return { name: matches[0], message: '' };
+  if (matches.length === 0) return { name: '', message: 'No world name contains "' + query + '".' };
+  const more = matches.length > LISTED_MATCH_COUNT ? ', and ' + (matches.length - LISTED_MATCH_COUNT) + ' more' : '';
+  return { name: '', message: matches.length + ' world names contain "' + query + '": ' + matches.slice(0, LISTED_MATCH_COUNT).join(', ') + more + '.' };
+}
+
+addInput.addEventListener('keydown', (event) => {
+  // the keys typed in the box are text, so the page's own keys do not act on them
+  event.stopPropagation();
+  if (event.key === 'Escape') {
+    addInput.value = '';
+    setText('addMessage', '');
+    addInput.blur();
+    return;
+  }
+  if (event.key !== 'Enter') return;
+  const found = findWorld(addInput.value);
+  setText('addMessage', found.message);
+  if (found.name === '') return;
+  if (!favorites.has(found.name)) {
+    favorites.add(found.name);
+    addedWorlds.push(found.name);
+    save();
+  }
+  addInput.value = '';
+  addInput.blur();
+  // show the world in the Favorites list
+  positions[tab] = current;
+  tab = FAVORITES;
+  current = tabNames(FAVORITES).indexOf(found.name);
+  render();
+});
+
+// The Default button replaces the favorites with the default favorites.
+document.getElementById('defaults').addEventListener('click', (event) => {
+  event.currentTarget.blur();
+  const defaults = parseFavorites(DEFAULT_HASH);
+  if (!confirm('Replace the ' + favorites.size + ' favorites with the ' + defaults.size + ' default favorites?')) return;
+  favorites = defaults;
+  forgetLastChanges();
+  save();
+  render();
+});
+
+// The URL that the iframe loads: the site's start page with the world named in start, and ante=0, which makes the site
+// open in the world without its antechamber (src/main.js). The /w/NAME/ page of worldUrl redirects to the start page
+// and drops added parameters, so the iframe does not use it.
+function frameWorldUrl(name) {
+  return SITE + '/?start=' + encodeURIComponent(name) + '&ante=0';
+}
+
+function worldUrl(name) {
+  return SITE + '/w/' + encodeURIComponent(name) + '/';
+}
+
+// makes the selected world a favorite or not, and moves on: forward when the world stays in this tab; when it leaves (a favorite unfavorited in the Favorites tab), the next world takes its place
+function setFavorite(isFavorite) {
+  const name = NAMES[current];
+  if (isFavorite) { favorites.add(name); addedWorlds.push(name); } else { favorites.delete(name); removedWorlds.push(name); }
+  save();
+  const remaining = tabNames(tab);
+  if (remaining.length === 0) current = 0;
+  else current = (remaining.includes(name) ? current + 1 : current) % remaining.length;
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.ctrlKey || event.altKey || event.metaKey) return;
+  const key = event.key.toLowerCase();
+  if (key === 'tab') {
+    event.preventDefault();
+    const step = event.shiftKey ? TAB_ORDER.length - 1 : 1;
+    showTab(TAB_ORDER[(TAB_ORDER.indexOf(tab) + step) % TAB_ORDER.length]);
+    return;
+  }
+  if (key === 'a') {
+    // preventDefault keeps the letter a out of the add box
+    event.preventDefault();
+    addInput.focus();
+    return;
+  }
+  if (key === 'p') showThumb = !showThumb;
+  else if (key === 'i') {
+    if (!interactAvailable) return;
+    interact = true;
+    render();
+    document.getElementById('frame').focus();
+    clearTimeout(interactTimer);
+    interactTimer = setTimeout(endInteract, INTERACT_SECONDS * 1000);
+    return;
+  }
+  else if (key === 'arrowleft' || key === 'arrowright') {
+    event.preventDefault();
+    const makesFavorite = key === 'arrowleft';
+    const action = arrowAction(makesFavorite);
+    if (action === NONE) return;
+    if (action === SET) setFavorite(makesFavorite); else undoFavorite(makesFavorite);
+  }
+  else if (NAMES.length === 0) return;
+  else if (key === 'arrowup' || key === 'arrowdown') {
+    event.preventDefault();
+    current = (current + (key === 'arrowdown' ? 1 : NAMES.length - 1)) % NAMES.length;
+  }
+  else return;
+  render();
+});
+
+// A click inside the iframe moves the keyboard focus to the world's page, which is on another origin,
+// so this page stops receiving keys. Unless the user asked for that with the i key, take the focus back.
+window.addEventListener('blur', () => {
+  if (interact) return;
+  setTimeout(() => {
+    const frame = document.getElementById('frame');
+    if (document.activeElement !== frame) return;
+    frame.blur();
+    window.focus();
+  }, 0);
+});
+
+// ends the i key's period: this page takes the keyboard focus back from the world
+function endInteract() {
+  clearTimeout(interactTimer);
+  interact = false;
+  const frame = document.getElementById('frame');
+  if (document.activeElement === frame) {
+    frame.blur();
+    window.focus();
+  }
+  render();
+}
+
+// a click on this page, outside the iframe, ends the i key's period early
+document.addEventListener('mousedown', () => {
+  if (interact) endInteract();
+});
+
+setText('interactSeconds', String(INTERACT_SECONDS));
+
+render();
+</script>
+</body>
+</html>
